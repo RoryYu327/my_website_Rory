@@ -65,7 +65,7 @@ params:
         url: '#'
     links:
       - name: Home
-        url: '#'
+        url: https://website4rory.netlify.app/
       - name: Blogs
         url: blogs
       - name: Generic Blog
@@ -73,8 +73,8 @@ params:
       - name: Elements
         url: elements.html
     menu: Menu
-    subtitle: By HTML5 Up
-    title: Forty
+    subtitle: By Rory Yu
+    title: RY
   tiles:
     enable: yes
     showcase:
