@@ -55,7 +55,7 @@ params:
         label: LinkedIn
         url: https://www.linkedin.com/in/roryyu/
   image: ''
-  name: Your name
+  name: Rory Yu
   navigation:
     button:
       - name: Get Started
