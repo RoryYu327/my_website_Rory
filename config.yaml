@@ -6,7 +6,7 @@ googleAnalytics: ''
 disqusShortname: ''
 params:
   banner:
-    buttonText: Get Started
+    buttonText: See more
     subtitle: |-
       A PERSONAL WEBSITE BUILT FOR APPLIED STATISTICS MODULE
       AT LONDON BUSINESS SCHOOL.
@@ -42,15 +42,12 @@ params:
         text: 'Design: '
         url: https://www.html5up.net
     social:
-      - icon: fa-twitter
-        label: Twitter
-        url: https://www.twitter.com
       - icon: fa-facebook
         label: Facebook
-        url: https://www.facebook.com
+        url: https://www.facebook.com/profile.php?id=100006030704488
       - icon: fa-instagram
         label: Instagram
-        url: https://www.instagram.com
+        url: https://www.instagram.com/roryyyyyu/
       - icon: fa-github
         label: GitHub
         url: https://github.com/RoryYu327
