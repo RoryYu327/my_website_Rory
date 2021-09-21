@@ -1,0 +1,298 @@
+---
+authors:
+- Hugo Authors
+date: "`r Sys.Date()`"
+excerpt: Analysis of the relationship between HIV prevalence and Life expectancy
+hero: /hero/pic02.jpg
+title: "HIV Prevalence and Life Expectancy"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE, 
+  warning = FALSE, 
+  tidy=FALSE,     # display code as typed
+  size="small")   # slightly smaller font for code
+options(digits = 3)
+
+# default figure size
+knitr::opts_chunk$set(
+  fig.width=4.75, 
+  fig.height=4.75,
+  fig.align = "center")
+```
+
+
+```{r load-libraries, include=FALSE}
+library(tidyverse)  # Load ggplot2, dplyr, and all the other tidyverse packages
+library(mosaic)
+library(ggthemes)
+library(lubridate)
+library(here)
+library(skimr)
+library(janitor)
+library(httr)
+library(readxl)
+library(vroom)
+```
+
+# Clean data and join datasets
+
+We have the `gapminder` data frame from the gapminder package. This data frame contains just six columns from the larger [data in Gapminder World](https://www.gapminder.org/data/). Specifically, we will look at data on 
+
+- Life expectancy at birth (life_expectancy_years.csv)
+- GDP per capita in constant 2010 US$ (https://data.worldbank.org/indicator/NY.GDP.PCAP.KD)
+- Female fertility: The number of babies per woman (https://data.worldbank.org/indicator/SP.DYN.TFRT.IN)
+- Primary school enrollment as % of children attending primary school (https://data.worldbank.org/indicator/SE.PRM.NENR)
+- Mortality rate, for under 5, per 1000 live births (https://data.worldbank.org/indicator/SH.DYN.MORT)
+- HIV prevalence (adults_with_hiv_percent_age_15_49.csv): The estimated number of people living with HIV per 100 population of age group 15-49.
+
+Then we will use `wbstats` package to download data from the World Bank. The relevant World Bank indicators are `SP.DYN.TFRT.IN`, `SE.PRM.NENR`, `NY.GDP.PCAP.KD`, and `SH.DYN.MORT`
+
+```{r get_data, cache=TRUE}
+# load gapminder HIV data
+hiv <- read_csv(here::here("data","adults_with_hiv_percent_age_15_49.csv"))
+life_expectancy <- read_csv(here::here("data","life_expectancy_years.csv"))
+
+# get World bank data using wbstats
+indicators <- c("SP.DYN.TFRT.IN","SE.PRM.NENR", "SH.DYN.MORT", "NY.GDP.PCAP.KD")
+
+library(wbstats)
+
+worldbank_data <- wb_data(country="countries_only", #countries only- no aggregates like Latin America, Europe, etc.
+                          indicator = indicators, 
+                          start_date = 1960, 
+                          end_date = 2016)
+
+# get a dataframe of information regarding countries, indicators, sources, regions, indicator topics, lending types, income levels,  from the World Bank API 
+countries <-  wbstats::wb_cachelist$countries
+worldbank_data <- inner_join(worldbank_data, countries, by = "country")
+
+```
+
+## Join the datasets
+We will join the 3 dataframes (life_expectancy, worldbank_data, and HIV) into one.
+
+```{r tidy data and join data by country & year}
+
+#tidy HIV data
+tidy_hiv <- hiv %>% 
+  pivot_longer(
+    cols = 2:34,
+    names_to = "Year",
+    values_to = "Adult_hiv_percent")
+
+#tidy life expectancy data
+tidy_life_expectancy <- life_expectancy %>% 
+  pivot_longer(
+    col = 2:302,
+    names_to = "Year",
+    values_to = "Life_expectancy")
+
+#tidy worldbank date
+tidy_worldbank_data <- worldbank_data %>%
+  mutate(Year = as.character(date)) %>% 
+  rename(GDP_per_capita = NY.GDP.PCAP.KD,
+         Female_fertility = SP.DYN.TFRT.IN,
+         Primary_school_enrollment = SE.PRM.NENR,
+         Mortality_rate = SH.DYN.MORT)
+
+#firstly join HIV and life expectancy data; then join with worldbank data all using country and year
+joined_data <- list(tidy_hiv, tidy_life_expectancy, tidy_worldbank_data) %>% 
+  reduce(inner_join, by = c("country", "Year"))
+
+```
+
+We used inner_join to join 3 dataframes because inner_join would take intersection of different dataframes and ensure we can perform the following relationship analyses with required data. Although some observations have NA entries and are still included in the joined data, we have excluded such NA entries and the perform the analyses.  
+Also, we are using inner_join() because it joins dataframes according to the provided condition. In this case, only observations with the same country and year available would be joined together.  
+
+# Relationship analysis
+
+## Relationship between HIV prevalence and life expectancy
+
+```{r relationship between HIV prevalence and life expectancy, fig.width=10, fig.height=10}
+HIV_Life <- joined_data %>% 
+  #clear out all NA
+  filter(!is.na(Adult_hiv_percent))
+
+ggplot(HIV_Life, 
+       aes(x = Adult_hiv_percent,
+           y = Life_expectancy))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method = "lm", formula = y ~ x)+
+  theme_bw()+
+  labs(
+    title = "Relationship between HIV prevalence and life expectancy",
+    subtitle = "",
+    x = "% Adults between 15 and 49 with HIV",
+    y = "Life expectancy (in years)"
+  )+
+  facet_wrap(vars(region), scales="free")+
+  #to remove the skewness on a-axis
+  scale_x_log10() 
+
+```
+Generally, there is a negative relationship between HIV prevalence and Life Expectancy. When there are more people between 15 and 49 getting HIV, the life expectancy of that country would decrease. Such trend is most evident in regions like Latin America, Sub-Saharan Africa and Middle East & North Africa.   
+However, for Europe and Central Asia, the trend has been positive. It does not suggest that more HIV cases would boost life expectancy. It might be attributed to the local healthcare improvement and higher budget for healthcare.   
+
+## Relationship between fertility rate and GDP per capita
+
+```{r relationship between GDP per capita and female fertility, fig.width=10, fig.height=10}
+Fert_GDP <- joined_data %>% 
+  #clear out all NA
+  filter(!is.na(Female_fertility))
+
+ggplot(Fert_GDP, 
+       aes(x = GDP_per_capita,
+           y = Female_fertility
+           ))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method = "lm", formula = y ~ x)+
+  theme_bw()+
+  labs(
+    title = "Relationship between GDP per capita and Female fertility",
+    subtitle = "",
+    x = "GDP per capita (constant 2010 US$)",
+    y = "Female fertility (births per woman)"
+  )+
+  facet_wrap(vars(region), scales="free")+
+  #to remove the skewness on a-axis
+  scale_x_log10() 
+
+```
+Generally, the relationship between GDP per capita and Female fertility is negative. This trend is evident in most regions but North America. There are many explanations:
+
+ - Firstly, the relative value of time to females in countries with different GDP per capita are extremely different. Higher GDP per capita would motivate females to work instead of staying at home and raising kids.  
+ - Secondly, in countries with higher GDP per capita, the expense to raise and educate a child is far higher than that in low-GDP countries. The competition in higher-GDP countries is also far more fierce, causing parents spending too much money on education.  
+ - Thirdly, with high GDP per capita and higher personal income, females would have more choices other than marriage and child-bearing. They would have higher tendency to pursue personal aspirations and left less time for having many children.  
+
+## Regions with the most observations with missing HIV data
+
+```{r most observations with missing HIV data}
+#count missing HIV values
+Missing_HIV <- joined_data %>% 
+  group_by(region) %>% 
+  count(Adult_hiv_percent = NA) %>% 
+  mutate(n)
+
+ggplot(Missing_HIV, 
+       aes(y = reorder(region, n),
+           n))+
+  geom_col()+
+  labs(
+    title = "Missing observations of HIV data in each Continent",
+    x= "Region",
+    y = "Count of missing HIV data")
+  
+```
+The Sub-Saharan Africa region has the most missing HIV data in the dataframe. The plot above shows the descending order of missing HIV data of each region.
+
+## Mortality rate for under 5 changed by region. 
+
+```{r regional difference in mortality rate for under 5, fig.width=10}
+#clear out all NA
+Mortality_plot <- joined_data %>% 
+  filter(!is.na(Mortality_rate))
+
+ggplot(Mortality_plot, 
+       aes(x = Year,
+           y = Mortality_rate,
+           color = region
+           ))+
+  geom_point(alpha=0.3)+
+  theme_bw()+
+  labs(
+    title = "Changes of Mortality rate for under 5 across regions",
+    subtitle = "",
+    x = "Year",
+    y = "Mortality rate for under 5 (per 1000 living births)",
+    color = "Region")+
+  facet_wrap(vars(region))+
+  #to remove the skewness on a-axis
+  scale_x_discrete(breaks=seq(1900, 2020, 5))+
+  theme(plot.title = element_text(size=16),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=12),
+        axis.text.x = element_text(size=8),
+        axis.text.y = element_text(size=12),
+        strip.text = element_text(size=10),
+        legend.text = element_text(size=10),
+        legend.title = element_text(size=12)
+        )
+```
+For Mortality rate for under 5 of different regions, there are huge differences in their changes over time.
+
+- For North America, such rate has been remaining in very low level since 1979.
+- For East Asia, Middle East & North Africa, Europe and Latin America, even though in 1979 the mortality rate was in high levels, it has been decreasing since 1979 to approximately half of the initial level.
+- For South Asia, the mortality rate in 1979 was higher than the rate in East Asia. But through the development since then, the mortality rate has also reduced to half of its level.
+- For Sub-Saharan Africa, the mortality rate in 1979 has remained the highest among all regions since then. Within the region, the national differences are huge as well. Even in 2011, there are still countries where 150 new births out of 1000 would die before the age of 5.
+
+## Top 5 and bottom 5 countries in each region
+```{r top 5 and bottom 5 countries in each region}
+Mortality_rank <- joined_data %>% 
+  group_by(country) %>% 
+  mutate(
+    #calculate yearly percentage change in mortality rate
+    difference_of_rate = (Mortality_rate - lag(Mortality_rate))/lag(Mortality_rate)*100,
+    #define initial level
+    First = head(Mortality_rate, 1),
+    #calculate 1979-2011 overall change in mortality rate
+    BaselineChange = case_when(Mortality_rate != First ~ (Mortality_rate - First)/First*100,
+                               TRUE ~ 1 * NA)) %>% 
+  filter(Year == 2011, !is.na(BaselineChange)) %>% 
+  select(country, region, BaselineChange) %>% 
+  group_by(region)
+
+Minimum_change_list <- Mortality_rank %>% 
+  slice_max(order_by = BaselineChange, n = 5) %>% 
+  knitr::kable(bootstrap_options = c ("striped","hover","condensed","responsive"), caption = "Top 5 countries in each region seeing the smallest changes in mortality rate")%>%
+  kableExtra::kable_styling()
+
+Maximum_change_list <- Mortality_rank %>% 
+  slice_min(order_by = BaselineChange, n = 5) %>% 
+  knitr::kable(bootstrap_options = c ("striped","hover","condensed","responsive"), caption = "Top 5 countries in each region seeing the largest changes in mortality rate") %>%
+  kableExtra::kable_styling()
+
+Minimum_change_list
+Maximum_change_list
+
+```
+
+## Relationship between primary school enrollment and fertility rate
+
+```{r relationship between primary school enrollment and female fertility, fig.width=10, fig.height=10}
+#clear out all NA
+Fert_PrimEnrol <- joined_data %>% 
+  filter(!is.na(Primary_school_enrollment), !is.na(Female_fertility))
+
+ggplot(Fert_PrimEnrol, 
+       aes(x = Primary_school_enrollment,
+           y = Female_fertility))+
+  geom_point(alpha=0.3)+
+  geom_smooth(method = "lm",
+              formula = y ~ x)+
+  theme_bw()+
+  labs(
+    title = "Relationship between Primary School Enrollment and Female fertility",
+    subtitle = "",
+    x = "Primary School Enrollment (% net)",
+    y = "Female fertility (births per woman)"
+  )+
+  facet_wrap(vars(region), scales="free")+
+  #to remove the skewness on axes
+  scale_x_log10()+
+  scale_y_log10()+
+  theme(plot.title = element_text(size=14),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14),
+        axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=14),
+        strip.text = element_text(size=12),
+        )
+  
+```
+Generally, there is a negative relationship between primary school enrollment and female fertility. However, it is also worth noting that such relationship is less significant in Europe & Central Asia. There are a huge cluster of observations on the right of the distribution and the best fitting line is actually positive sloping. Here are some possible explanations for the negative trend in regions such as Sub-Saharan Africa and Middle East:
+
+- Firstly, primary school enrollment could be used as a proxy for national development, wealthiness and cultural value in education. In countries with higher primary school enrollment, it can be expected that females could spend more time pursuing personal goals and spend less time having kids.
+- Secondly, higher primary school enrollment could help promote maternal and child health. Literacy developed in primary school would largely help females read and understand labels or caveats on drug bottles or on many instructions. Therefore, they wouldn't need to give birth to many children.
+- Thirdly, having primary school education would help postpone marriage for many teenage girls, especially in rural and less developed areas. Being older getting into marriage, females would on average have less probability in having kids. 
