@@ -91,14 +91,6 @@ params:
         subtitle: this is blog 4
         title: blog4
         url: blogs/blog4
-      - image: pic05.jpg
-        subtitle: another blog 2
-        title: blog2
-        url: blogs/blog2
-      - image: pic06.jpg
-        subtitle: another blog 3
-        title: blog3
-        url: blogs/blog3
   two:
     buttonText: See more
     enable: yes
