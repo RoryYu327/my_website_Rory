@@ -1,0 +1,1107 @@
+---
+categories:
+- ""
+- ""
+date: "2021-09-21"
+description: A plot showing the weekly approval rate for president Biden
+draft: false
+image: pic10.jpg
+keywords: ""
+slug: blog3
+title: Biden's Approval Margins
+---
+
+<script src="/rmarkdown-libs/header-attrs/header-attrs.js"></script>
+<script src="/rmarkdown-libs/kePrint/kePrint.js"></script>
+<link href="/rmarkdown-libs/lightable/lightable.css" rel="stylesheet" />
+
+
+<div id="bidens-approval-margins" class="section level1">
+<h1>Biden’s Approval Margins</h1>
+<p>In this post, we will use data from &lt;www.fivethirtyeight.com&gt; on all polls that track the president Biden’s approval rate in the US.
+(<a href="https://projects.fivethirtyeight.com/biden-approval-ratings" class="uri">https://projects.fivethirtyeight.com/biden-approval-ratings</a>)</p>
+<div id="import-data" class="section level2">
+<h2>Import data</h2>
+<pre class="r"><code># Import approval polls data directly off fivethirtyeight website
+approval_polllist &lt;- read_csv(&#39;https://projects.fivethirtyeight.com/biden-approval-data/approval_polllist.csv&#39;) 
+
+glimpse(approval_polllist)</code></pre>
+<pre><code>## Rows: 1,597
+## Columns: 22
+## $ president           &lt;chr&gt; &quot;Joseph R. Biden Jr.&quot;, &quot;Joseph R. Biden Jr.&quot;, &quot;Jos~
+## $ subgroup            &lt;chr&gt; &quot;All polls&quot;, &quot;All polls&quot;, &quot;All polls&quot;, &quot;All polls&quot;~
+## $ modeldate           &lt;chr&gt; &quot;9/21/2021&quot;, &quot;9/21/2021&quot;, &quot;9/21/2021&quot;, &quot;9/21/2021&quot;~
+## $ startdate           &lt;chr&gt; &quot;2/3/2021&quot;, &quot;2/4/2021&quot;, &quot;2/4/2021&quot;, &quot;2/5/2021&quot;, &quot;2~
+## $ enddate             &lt;chr&gt; &quot;2/7/2021&quot;, &quot;2/6/2021&quot;, &quot;2/8/2021&quot;, &quot;2/7/2021&quot;, &quot;2~
+## $ pollster            &lt;chr&gt; &quot;Rasmussen Reports/Pulse Opinion Research&quot;, &quot;RMG R~
+## $ grade               &lt;chr&gt; &quot;B&quot;, &quot;B-&quot;, &quot;B&quot;, &quot;B&quot;, &quot;B&quot;, &quot;B&quot;, &quot;B+&quot;, &quot;B&quot;, &quot;B+&quot;, &quot;B~
+## $ samplesize          &lt;dbl&gt; 1500, 1200, 1500, 15000, 1986, 15000, 2508, 15000,~
+## $ population          &lt;chr&gt; &quot;lv&quot;, &quot;rv&quot;, &quot;lv&quot;, &quot;a&quot;, &quot;rv&quot;, &quot;a&quot;, &quot;a&quot;, &quot;a&quot;, &quot;a&quot;, &quot;~
+## $ weight              &lt;dbl&gt; 0.192, 0.881, 0.537, 0.265, 0.105, 0.239, 1.588, 0~
+## $ influence           &lt;dbl&gt; 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,~
+## $ approve             &lt;dbl&gt; 50.0, 60.0, 51.0, 55.0, 59.0, 55.0, 61.0, 55.0, 50~
+## $ disapprove          &lt;dbl&gt; 47.0, 32.0, 46.0, 33.0, 35.0, 33.0, 39.0, 33.0, 37~
+## $ adjusted_approve    &lt;dbl&gt; 52.5, 59.3, 53.5, 53.6, 57.6, 53.6, 62.3, 53.6, 51~
+## $ adjusted_disapprove &lt;dbl&gt; 41.0, 33.1, 40.0, 36.3, 38.3, 36.3, 39.3, 36.3, 37~
+## $ multiversions       &lt;chr&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA~
+## $ tracking            &lt;lgl&gt; TRUE, NA, TRUE, TRUE, NA, TRUE, NA, TRUE, NA, TRUE~
+## $ url                 &lt;chr&gt; &quot;https://www.rasmussenreports.com/public_content/p~
+## $ poll_id             &lt;dbl&gt; 74349, 74354, 74352, 74372, 74351, 74370, 74357, 7~
+## $ question_id         &lt;dbl&gt; 139669, 139679, 139675, 139746, 139673, 139738, 13~
+## $ createddate         &lt;chr&gt; &quot;2/8/2021&quot;, &quot;2/9/2021&quot;, &quot;2/9/2021&quot;, &quot;2/11/2021&quot;, &quot;~
+## $ timestamp           &lt;chr&gt; &quot;09:36:08 21 Sep 2021&quot;, &quot;09:36:08 21 Sep 2021&quot;, &quot;0~</code></pre>
+<pre class="r"><code># Use `lubridate` to fix dates, as they are given as characters.
+# Use enddate as the date of the poll result
+approval_polllist &lt;- approval_polllist %&gt;% 
+  mutate(enddate = mdy(enddate))</code></pre>
+</div>
+<div id="create-a-plot" class="section level2">
+<h2>Create a plot</h2>
+<p>Using the data, we wish to calculate the average net approval rate (approve - disapprove) for each week since Biden got into office. 
+Then we would like to plot the net approval rate, along with its 95% confidence interval.</p>
+<div id="tidy-data-and-calculate-confidence-interval" class="section level3">
+<h3>Tidy data and calculate Confidence Interval</h3>
+<pre class="r"><code>#tidy data and calculate CI using formula. 
+net_approval &lt;- approval_polllist %&gt;% 
+  #We concentrate only on subgroup &quot;voters&quot;
+  filter(!is.na(subgroup), subgroup == &quot;Voters&quot;) %&gt;%
+  #Use lubridate to get week number
+  mutate(week = isoweek(enddate),
+         net_approval_day = approve - disapprove) %&gt;% 
+  group_by(week) %&gt;%
+  summarise(mean_net_approval = mean(net_approval_day),
+            sd_net_approval = sd(net_approval_day),
+            count = n(),
+            se_twitter = sd_net_approval / sqrt(count),
+            t_critical = qt(0.975, count - 1),
+            lower_ci =  mean_net_approval - t_critical*se_twitter,
+            upper_ci = mean_net_approval + t_critical*se_twitter)
+
+#Report the weekly net approval rate for Biden
+net_approval %&gt;% 
+  knitr::kable(bootstrap_options = c (&quot;striped&quot;,&quot;hover&quot;,&quot;condensed&quot;,&quot;responsive&quot;)) %&gt;%
+  kableExtra::kable_styling()</code></pre>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:right;">
+week
+</th>
+<th style="text-align:right;">
+mean_net_approval
+</th>
+<th style="text-align:right;">
+sd_net_approval
+</th>
+<th style="text-align:right;">
+count
+</th>
+<th style="text-align:right;">
+se_twitter
+</th>
+<th style="text-align:right;">
+t_critical
+</th>
+<th style="text-align:right;">
+lower_ci
+</th>
+<th style="text-align:right;">
+upper_ci
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+18.333
+</td>
+<td style="text-align:right;">
+13.43
+</td>
+<td style="text-align:right;">
+3
+</td>
+<td style="text-align:right;">
+7.75
+</td>
+<td style="text-align:right;">
+4.30
+</td>
+<td style="text-align:right;">
+-15.026
+</td>
+<td style="text-align:right;">
+51.69
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+6
+</td>
+<td style="text-align:right;">
+10.889
+</td>
+<td style="text-align:right;">
+6.90
+</td>
+<td style="text-align:right;">
+9
+</td>
+<td style="text-align:right;">
+2.30
+</td>
+<td style="text-align:right;">
+2.31
+</td>
+<td style="text-align:right;">
+5.585
+</td>
+<td style="text-align:right;">
+16.19
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+7
+</td>
+<td style="text-align:right;">
+13.000
+</td>
+<td style="text-align:right;">
+9.16
+</td>
+<td style="text-align:right;">
+14
+</td>
+<td style="text-align:right;">
+2.45
+</td>
+<td style="text-align:right;">
+2.16
+</td>
+<td style="text-align:right;">
+7.713
+</td>
+<td style="text-align:right;">
+18.29
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+8
+</td>
+<td style="text-align:right;">
+11.044
+</td>
+<td style="text-align:right;">
+8.85
+</td>
+<td style="text-align:right;">
+15
+</td>
+<td style="text-align:right;">
+2.29
+</td>
+<td style="text-align:right;">
+2.14
+</td>
+<td style="text-align:right;">
+6.142
+</td>
+<td style="text-align:right;">
+15.95
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+9
+</td>
+<td style="text-align:right;">
+7.545
+</td>
+<td style="text-align:right;">
+6.88
+</td>
+<td style="text-align:right;">
+11
+</td>
+<td style="text-align:right;">
+2.07
+</td>
+<td style="text-align:right;">
+2.23
+</td>
+<td style="text-align:right;">
+2.926
+</td>
+<td style="text-align:right;">
+12.16
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:right;">
+9.583
+</td>
+<td style="text-align:right;">
+7.46
+</td>
+<td style="text-align:right;">
+12
+</td>
+<td style="text-align:right;">
+2.15
+</td>
+<td style="text-align:right;">
+2.20
+</td>
+<td style="text-align:right;">
+4.841
+</td>
+<td style="text-align:right;">
+14.33
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+11
+</td>
+<td style="text-align:right;">
+11.833
+</td>
+<td style="text-align:right;">
+9.95
+</td>
+<td style="text-align:right;">
+12
+</td>
+<td style="text-align:right;">
+2.87
+</td>
+<td style="text-align:right;">
+2.20
+</td>
+<td style="text-align:right;">
+5.510
+</td>
+<td style="text-align:right;">
+18.16
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+12
+</td>
+<td style="text-align:right;">
+9.231
+</td>
+<td style="text-align:right;">
+10.36
+</td>
+<td style="text-align:right;">
+13
+</td>
+<td style="text-align:right;">
+2.87
+</td>
+<td style="text-align:right;">
+2.18
+</td>
+<td style="text-align:right;">
+2.969
+</td>
+<td style="text-align:right;">
+15.49
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+13
+</td>
+<td style="text-align:right;">
+6.300
+</td>
+<td style="text-align:right;">
+9.67
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:right;">
+3.06
+</td>
+<td style="text-align:right;">
+2.26
+</td>
+<td style="text-align:right;">
+-0.620
+</td>
+<td style="text-align:right;">
+13.22
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+14
+</td>
+<td style="text-align:right;">
+6.625
+</td>
+<td style="text-align:right;">
+9.47
+</td>
+<td style="text-align:right;">
+8
+</td>
+<td style="text-align:right;">
+3.35
+</td>
+<td style="text-align:right;">
+2.37
+</td>
+<td style="text-align:right;">
+-1.293
+</td>
+<td style="text-align:right;">
+14.54
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+15
+</td>
+<td style="text-align:right;">
+8.933
+</td>
+<td style="text-align:right;">
+7.52
+</td>
+<td style="text-align:right;">
+15
+</td>
+<td style="text-align:right;">
+1.94
+</td>
+<td style="text-align:right;">
+2.14
+</td>
+<td style="text-align:right;">
+4.771
+</td>
+<td style="text-align:right;">
+13.10
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+16
+</td>
+<td style="text-align:right;">
+10.067
+</td>
+<td style="text-align:right;">
+7.97
+</td>
+<td style="text-align:right;">
+15
+</td>
+<td style="text-align:right;">
+2.06
+</td>
+<td style="text-align:right;">
+2.14
+</td>
+<td style="text-align:right;">
+5.654
+</td>
+<td style="text-align:right;">
+14.48
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+17
+</td>
+<td style="text-align:right;">
+9.346
+</td>
+<td style="text-align:right;">
+10.07
+</td>
+<td style="text-align:right;">
+13
+</td>
+<td style="text-align:right;">
+2.79
+</td>
+<td style="text-align:right;">
+2.18
+</td>
+<td style="text-align:right;">
+3.259
+</td>
+<td style="text-align:right;">
+15.43
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+18
+</td>
+<td style="text-align:right;">
+8.233
+</td>
+<td style="text-align:right;">
+7.60
+</td>
+<td style="text-align:right;">
+12
+</td>
+<td style="text-align:right;">
+2.19
+</td>
+<td style="text-align:right;">
+2.20
+</td>
+<td style="text-align:right;">
+3.405
+</td>
+<td style="text-align:right;">
+13.06
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+19
+</td>
+<td style="text-align:right;">
+3.500
+</td>
+<td style="text-align:right;">
+5.18
+</td>
+<td style="text-align:right;">
+8
+</td>
+<td style="text-align:right;">
+1.83
+</td>
+<td style="text-align:right;">
+2.37
+</td>
+<td style="text-align:right;">
+-0.833
+</td>
+<td style="text-align:right;">
+7.83
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:right;">
+12.821
+</td>
+<td style="text-align:right;">
+7.23
+</td>
+<td style="text-align:right;">
+14
+</td>
+<td style="text-align:right;">
+1.93
+</td>
+<td style="text-align:right;">
+2.16
+</td>
+<td style="text-align:right;">
+8.646
+</td>
+<td style="text-align:right;">
+17.00
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+21
+</td>
+<td style="text-align:right;">
+12.385
+</td>
+<td style="text-align:right;">
+5.99
+</td>
+<td style="text-align:right;">
+13
+</td>
+<td style="text-align:right;">
+1.66
+</td>
+<td style="text-align:right;">
+2.18
+</td>
+<td style="text-align:right;">
+8.763
+</td>
+<td style="text-align:right;">
+16.01
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+22
+</td>
+<td style="text-align:right;">
+7.111
+</td>
+<td style="text-align:right;">
+7.69
+</td>
+<td style="text-align:right;">
+9
+</td>
+<td style="text-align:right;">
+2.56
+</td>
+<td style="text-align:right;">
+2.31
+</td>
+<td style="text-align:right;">
+1.201
+</td>
+<td style="text-align:right;">
+13.02
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+23
+</td>
+<td style="text-align:right;">
+7.091
+</td>
+<td style="text-align:right;">
+7.05
+</td>
+<td style="text-align:right;">
+11
+</td>
+<td style="text-align:right;">
+2.12
+</td>
+<td style="text-align:right;">
+2.23
+</td>
+<td style="text-align:right;">
+2.355
+</td>
+<td style="text-align:right;">
+11.83
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+24
+</td>
+<td style="text-align:right;">
+8.643
+</td>
+<td style="text-align:right;">
+7.22
+</td>
+<td style="text-align:right;">
+14
+</td>
+<td style="text-align:right;">
+1.93
+</td>
+<td style="text-align:right;">
+2.16
+</td>
+<td style="text-align:right;">
+4.476
+</td>
+<td style="text-align:right;">
+12.81
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+25
+</td>
+<td style="text-align:right;">
+7.030
+</td>
+<td style="text-align:right;">
+4.79
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:right;">
+1.51
+</td>
+<td style="text-align:right;">
+2.26
+</td>
+<td style="text-align:right;">
+3.605
+</td>
+<td style="text-align:right;">
+10.46
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+26
+</td>
+<td style="text-align:right;">
+6.400
+</td>
+<td style="text-align:right;">
+7.91
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:right;">
+2.50
+</td>
+<td style="text-align:right;">
+2.26
+</td>
+<td style="text-align:right;">
+0.745
+</td>
+<td style="text-align:right;">
+12.05
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+27
+</td>
+<td style="text-align:right;">
+6.200
+</td>
+<td style="text-align:right;">
+8.13
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:right;">
+2.57
+</td>
+<td style="text-align:right;">
+2.26
+</td>
+<td style="text-align:right;">
+0.381
+</td>
+<td style="text-align:right;">
+12.02
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+28
+</td>
+<td style="text-align:right;">
+2.375
+</td>
+<td style="text-align:right;">
+3.62
+</td>
+<td style="text-align:right;">
+8
+</td>
+<td style="text-align:right;">
+1.28
+</td>
+<td style="text-align:right;">
+2.37
+</td>
+<td style="text-align:right;">
+-0.654
+</td>
+<td style="text-align:right;">
+5.40
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+29
+</td>
+<td style="text-align:right;">
+6.400
+</td>
+<td style="text-align:right;">
+5.28
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:right;">
+1.67
+</td>
+<td style="text-align:right;">
+2.26
+</td>
+<td style="text-align:right;">
+2.627
+</td>
+<td style="text-align:right;">
+10.17
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+30
+</td>
+<td style="text-align:right;">
+2.429
+</td>
+<td style="text-align:right;">
+7.92
+</td>
+<td style="text-align:right;">
+14
+</td>
+<td style="text-align:right;">
+2.12
+</td>
+<td style="text-align:right;">
+2.16
+</td>
+<td style="text-align:right;">
+-2.144
+</td>
+<td style="text-align:right;">
+7.00
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+31
+</td>
+<td style="text-align:right;">
+3.583
+</td>
+<td style="text-align:right;">
+6.23
+</td>
+<td style="text-align:right;">
+12
+</td>
+<td style="text-align:right;">
+1.80
+</td>
+<td style="text-align:right;">
+2.20
+</td>
+<td style="text-align:right;">
+-0.375
+</td>
+<td style="text-align:right;">
+7.54
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+32
+</td>
+<td style="text-align:right;">
+1.000
+</td>
+<td style="text-align:right;">
+6.42
+</td>
+<td style="text-align:right;">
+11
+</td>
+<td style="text-align:right;">
+1.94
+</td>
+<td style="text-align:right;">
+2.23
+</td>
+<td style="text-align:right;">
+-3.312
+</td>
+<td style="text-align:right;">
+5.31
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+33
+</td>
+<td style="text-align:right;">
+-0.267
+</td>
+<td style="text-align:right;">
+5.66
+</td>
+<td style="text-align:right;">
+15
+</td>
+<td style="text-align:right;">
+1.46
+</td>
+<td style="text-align:right;">
+2.14
+</td>
+<td style="text-align:right;">
+-3.403
+</td>
+<td style="text-align:right;">
+2.87
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+34
+</td>
+<td style="text-align:right;">
+-7.090
+</td>
+<td style="text-align:right;">
+5.85
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:right;">
+1.85
+</td>
+<td style="text-align:right;">
+2.26
+</td>
+<td style="text-align:right;">
+-11.272
+</td>
+<td style="text-align:right;">
+-2.91
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+35
+</td>
+<td style="text-align:right;">
+-5.700
+</td>
+<td style="text-align:right;">
+5.70
+</td>
+<td style="text-align:right;">
+13
+</td>
+<td style="text-align:right;">
+1.58
+</td>
+<td style="text-align:right;">
+2.18
+</td>
+<td style="text-align:right;">
+-9.144
+</td>
+<td style="text-align:right;">
+-2.26
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+36
+</td>
+<td style="text-align:right;">
+-3.986
+</td>
+<td style="text-align:right;">
+3.75
+</td>
+<td style="text-align:right;">
+14
+</td>
+<td style="text-align:right;">
+1.00
+</td>
+<td style="text-align:right;">
+2.16
+</td>
+<td style="text-align:right;">
+-6.153
+</td>
+<td style="text-align:right;">
+-1.82
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+37
+</td>
+<td style="text-align:right;">
+-5.143
+</td>
+<td style="text-align:right;">
+5.07
+</td>
+<td style="text-align:right;">
+14
+</td>
+<td style="text-align:right;">
+1.35
+</td>
+<td style="text-align:right;">
+2.16
+</td>
+<td style="text-align:right;">
+-8.068
+</td>
+<td style="text-align:right;">
+-2.22
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+38
+</td>
+<td style="text-align:right;">
+-3.500
+</td>
+<td style="text-align:right;">
+12.02
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+8.50
+</td>
+<td style="text-align:right;">
+12.71
+</td>
+<td style="text-align:right;">
+-111.503
+</td>
+<td style="text-align:right;">
+104.50
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="plot-the-net-approval-rate" class="section level3">
+<h3>Plot the net approval rate</h3>
+<pre class="r"><code>ggplot(net_approval, 
+       aes(x= week, 
+           y= mean_net_approval)) +
+  geom_line(color = &quot;red&quot;)+
+  geom_point(color = &quot;red&quot;, size = 1)+
+  geom_smooth(color = &quot;blue&quot;,
+              level = 0,
+              size = 1)+
+  #add orange line at zero
+  geom_hline(yintercept=0, 
+             color = &quot;orange&quot;, 
+             size = 2)+
+  theme_minimal()+
+  #add confidence band using calculated CI
+  geom_ribbon(aes(ymin = lower_ci, 
+                  ymax = upper_ci),
+              alpha=0.3,
+              fill = &quot;grey&quot;,
+              color = &quot;red&quot;) + 
+  labs(
+    title = &quot;Estimating Approval Margin (approve-disapprove) for Joe Biden&quot;,
+    subtitle = &quot;Weekly average approval of subgroup \&quot;Voters\&quot;&quot;,
+    x = &quot;Week of the year&quot;,
+    y = &quot;Average Approval Margin (approve-disapprove)&quot;)+
+  scale_y_continuous(breaks=seq(-15,10,2.5), limits=c(-15,40))+
+  scale_x_continuous(breaks=seq(0,40,13))+
+  theme(
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18),
+    axis.title.x = element_text(size=22, face=&quot;bold&quot;),
+    axis.title.y = element_text(size=22, face=&quot;bold&quot;),
+    plot.title = element_text(size = 22, face=&quot;bold&quot;),
+    plot.subtitle = element_text(size=20, face=&quot;bold&quot;)
+  )+
+   annotate(&quot;text&quot;, x=19.5, y=20, label=&quot;2021&quot;, color = &quot;#333333&quot;, size=8)</code></pre>
+<p><img src="/blogs/Biden's Approval Margins_files/figure-html/Biden net approval rate plot-1.png" width="2496" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="compare-confidence-intervals" class="section level2">
+<h2>Compare Confidence Intervals</h2>
+<p>We then compare the confidence intervals for <code>week 5</code> and <code>week 25</code> to see if there are any changes in Biden’s net approval rate.</p>
+<pre class="r"><code>net_approval_5_25 &lt;- net_approval %&gt;% 
+  filter(week %in% c(5, 25)) %&gt;% 
+  mutate(
+    ci_width = upper_ci - lower_ci) %&gt;% 
+  select(week, lower_ci, upper_ci, ci_width)
+
+net_approval_5_25 %&gt;% 
+  knitr::kable(bootstrap_options = c (&quot;striped&quot;,&quot;hover&quot;,&quot;condensed&quot;,&quot;responsive&quot;)) %&gt;%
+  kableExtra::kable_styling()</code></pre>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:right;">
+week
+</th>
+<th style="text-align:right;">
+lower_ci
+</th>
+<th style="text-align:right;">
+upper_ci
+</th>
+<th style="text-align:right;">
+ci_width
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+-15.0
+</td>
+<td style="text-align:right;">
+51.7
+</td>
+<td style="text-align:right;">
+66.72
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+25
+</td>
+<td style="text-align:right;">
+3.6
+</td>
+<td style="text-align:right;">
+10.5
+</td>
+<td style="text-align:right;">
+6.85
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="analysis-of-the-difference" class="section level2">
+<h2>Analysis of the difference</h2>
+<p>From the results, we can clearly see that the confidence interval for Biden’s net approval rate has been narrower from week 5 to week 25. </p>
+<p>The standard deviation in approval ratings is much larger in week 5 than in week 25, which generates a higher standard error and consequently a wider confidence interval. We assume this is because as after Biden has been elected for a longer period of time in week 25 (almost half a year), voters would become more clear about their approval or disapproval to the president. After Americans took over 25-week time to evaluate their newly elected president, they would probably have a clearer attitude towards Biden’s policy changes, administration and national strategies. These clearer perceptions then result in this decreasing variance in approval ratings, consequently a lower standard deviation and ultimately more narrow confidence intervals.</p>
+</div>
+</div>
