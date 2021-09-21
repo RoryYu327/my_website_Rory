@@ -1,10 +1,14 @@
 ---
-authors:
-- Hugo Authors
+categories:
+- ""
+- ""
 date: "`r Sys.Date()`"
-excerpt: Analysis of the relationship between HIV prevalence and Life expectancy
-hero: /hero/pic02.jpg
-title: "HIV Prevalence and Life Expectancy"
+description: Analysis of the relationship between HIV prevalence and Life expectancy
+draft: false
+image: pic10.jpg
+keywords: ""
+slug: blog4
+title: HIV Prevalence and Life Expectancy
 ---
 
 ```{r setup, include=FALSE}

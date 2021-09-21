@@ -1,10 +1,14 @@
 ---
-authors:
-- Hugo Authors
+categories:
+- ""
+- ""
 date: "`r Sys.Date()`"
-excerpt: A plot showing the weekly approval rate for president Biden
-hero: 
-title: "Biden's Approval Margins"
+description: A plot showing the weekly approval rate for president Biden
+draft: false
+image: pic10.jpg
+keywords: ""
+slug: blog3
+title: Biden's Approval Margins
 ---
 
 ```{r setup, include = FALSE}
